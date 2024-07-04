@@ -149,7 +149,7 @@ def read_book(content,cover_img=None):
     chapterfile.create(chapter_data(content))
     print(Fore.GREEN+"Merging Files")
     time.sleep(2)
-    m4b_tool.merge(output_dir,os.path.join(output_dir,"book.m4b"),cover_img)
+    chapterfile.create_m4b(chapter_data(content),file_list)
 
 def add_metadata(xml_file, input_m4b=None, output_m4b=None,book_img=None):
     if input_m4b is None:
@@ -288,7 +288,7 @@ def main():
     # Process your file content and metadata
     if file_path.endswith(".txt"):
         read_book(file_content,cover_img)
-        add_metadata(metadata_opf, None, None, cover_img)
+        #add_metadata(metadata_opf, None, None, cover_img)
     elif file_path.endswith(".epub"):
         pass
     # Remove outdir
