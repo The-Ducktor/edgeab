@@ -134,19 +134,19 @@ def chapter_data(content):
             book_title = line.replace("Title:","").strip()
     return data
 
-
-def read_book(content,cover_img=None):
-    chapter_data(content)
-    print(Fore.BLUE + "Content before splitting into chapters:\n", content[:500], "...")
-    chapters = content.split("# ", 1)[-1].split("# ")
-    print(Fore.BLUE + f"Number of chapters found: {len(chapters)}")
-    for chapter_number, chapter in enumerate(chapters):
-        print(Fore.BLUE + f"Chapter {chapter_number + 1} content preview:\n", chapter[:200], "...")
-        process_chapter(chapter, chapter_number, chapters)
-    clean_up()
+debug_dont_tts = True
+def read_book(content,cover_img=None,is_debug=False):
+    if not is_debug:
+        chapter_data(content)
+        print(Fore.BLUE + "Content before splitting into chapters:\n", content[:500], "...")
+        chapters = content.split("# ", 1)[-1].split("# ")
+        print(Fore.BLUE + f"Number of chapters found: {len(chapters)}")
+        for chapter_number, chapter in enumerate(chapters):
+            print(Fore.BLUE + f"Chapter {chapter_number + 1} content preview:\n", chapter[:200], "...")
+            process_chapter(chapter, chapter_number, chapters)
+        clean_up()
     # Make into m4b audiobook and merge files
     file_list = [os.path.join(output_dir, f) for f in os.listdir(output_dir) if (f.endswith(".flac") and f.startswith("chapter"))]
-    chapterfile.create(chapter_data(content))
     print(Fore.GREEN+"Merging Files")
     time.sleep(2)
     chapterfile.create_m4b(chapter_data(content),file_list)
@@ -287,7 +287,7 @@ def main():
         file_content = file_txt.read()
     # Process your file content and metadata
     if file_path.endswith(".txt"):
-        read_book(file_content,cover_img)
+        read_book(file_content,cover_img,True)
         #add_metadata(metadata_opf, None, None, cover_img)
     elif file_path.endswith(".epub"):
         pass
