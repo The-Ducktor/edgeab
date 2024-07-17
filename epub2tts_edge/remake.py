@@ -90,6 +90,7 @@ def read_sentence(sentence, tcount, retries=3):
     )
     return None
 
+
 def split_list(lst, parts):
     length = len(lst)
     size = length // parts
@@ -113,6 +114,7 @@ def process_audio_chunk(audio_chunk):
             print(f"Error processing file {audio_file}: {e}")
     return combined_chunk
 
+
 def combine_audio(audio_list, chapter_number=None, output_dir="."):
     # Define the duration of silence in milliseconds (e.g., 1000 milliseconds = 1 second)
     silence_duration = 2000  # 2 seconds of silence
@@ -124,20 +126,24 @@ def combine_audio(audio_list, chapter_number=None, output_dir="."):
         return
 
     # Use a heuristic to determine chunk size
-    chunk_size = min(3, num_files)  # Example: Minimum chunk size of 3 or number of files
+    chunk_size = min(
+        3, num_files
+    )  # Example: Minimum chunk size of 3 or number of files
 
     # Split audio_list into chunks
     audio_chunks = [
-        audio_list[i:i + chunk_size] for i in range(0, len(audio_list), chunk_size)
+        audio_list[i : i + chunk_size] for i in range(0, len(audio_list), chunk_size)
     ]
 
     # Concurrently process each chunk
-    with ThreadPoolExecutor() as executor, \
-         alive_bar(len(audio_chunks), title=f"Combining Chapter {chapter_number + 1}") as bar:
-        
+    with ThreadPoolExecutor() as executor, alive_bar(
+        len(audio_chunks), title=f"Combining Chapter {chapter_number + 1}"
+    ) as bar:
         # Submit tasks to executor for concurrent processing
-        futures = [executor.submit(process_audio_chunk, chunk) for chunk in audio_chunks]
-        
+        futures = [
+            executor.submit(process_audio_chunk, chunk) for chunk in audio_chunks
+        ]
+
         # Retrieve results and combine chunks into final_audio
         final_audio = AudioSegment.empty()
         for future in futures:
@@ -151,12 +157,15 @@ def combine_audio(audio_list, chapter_number=None, output_dir="."):
     # Export the combined audio to a file
     combined_filename = os.path.join(output_dir, f"chapter_{chapter_number + 1}.flac")
     final_audio.export(combined_filename, format="flac")
-    print(f"Combined audio for Chapter {chapter_number + 1} saved as {combined_filename}")
+    print(
+        f"Combined audio for Chapter {chapter_number + 1} saved as {combined_filename}"
+    )
 
     # Optionally, clean up individual audio files
     for chunk in audio_chunks:
         for audio_file in chunk:
             os.remove(audio_file)
+
 
 def process_chapter(chapter, chapter_number, total_chapters):
     sentences = [sentence for sentence in chapter.split("\n") if sentence.strip()]
@@ -209,7 +218,7 @@ def process_chapter(chapter, chapter_number, total_chapters):
         for i in sentence_dict
         if sentence_dict[i]["processed"]
     ]
-    combine_audio(audio_files,chapter_number,output_dir)
+    combine_audio(audio_files, chapter_number, output_dir)
 
 
 def clean_up():
@@ -403,7 +412,7 @@ def main():
     cover_img = args.cover_img
     print(f"{file_path}")
     # Read text file content
-    
+
     # Process your file content and metadata
     if file_path.endswith(".txt"):
         with open(file_path, "r") as file_txt:
