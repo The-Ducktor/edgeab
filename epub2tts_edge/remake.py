@@ -43,24 +43,34 @@ def append_silence(tempfile, duration=1200):
     combined.export(tempfile, format="flac")
     return True
 
+
 async def run_tts(sentence, filename):
     communicate = edge_tts.Communicate(sentence, "en-US-BrianNeural")
     await communicate.save(filename)
     return append_silence(filename)
 
+
+SILENCE_DURATION = 1600
+
+
 def read_sentence(sentence, tcount, retries=3):
     filename = os.path.join(output_dir, f"pg{tcount}.flac")
-    
+
     # Check if already processed
     if filename in processed_files:
-        print(Fore.YELLOW + "Already exits")
+        print(Fore.YELLOW + "Already exists")
         return filename
-    
+
     attempt = 0
     while attempt < retries:
         try:
             if "◇" in sentence:
-                print(Fore.YELLOW + "Ignore not possible")
+                print(Fore.YELLOW + "Special symbol found, adding silence")
+                silence = AudioSegment.silent(duration=SILENCE_DURATION)
+                silence.export(filename, format="flac")
+                processed_files[filename] = True
+                return filename
+
             asyncio.run(run_tts(sentence, filename))
             if os.path.exists(filename) and os.path.getsize(filename) > 0:
                 processed_files[filename] = True
@@ -68,28 +78,120 @@ def read_sentence(sentence, tcount, retries=3):
             else:
                 print(Fore.YELLOW + "Audio file is empty, retrying...")
         except Exception as e:
-            print(Fore.YELLOW + f'Retrying sentence "{sentence}" / {tcount + 1} due to error: {e}')
+            print(
+                Fore.YELLOW
+                + f'Retrying sentence "{sentence}" / {tcount + 1} due to error: {e}'
+            )
         attempt += 1
-        time.sleep(1 ** attempt)
-    
-    print(Fore.RED + f"Failed to process sentence {tcount + 1} after {retries} attempts")
+        time.sleep(1**attempt)
+
+    print(
+        Fore.RED + f"Failed to process sentence {tcount + 1} after {retries} attempts"
+    )
     return None
+
+def split_list(lst, parts):
+    length = len(lst)
+    size = length // parts
+    leftovers = length % parts
+    start = 0
+    result = []
+    for i in range(parts):
+        end = start + size + (1 if leftovers > 0 else 0)
+        result.append(lst[start:end])
+        start = end
+        leftovers -= 1
+    return result
+
+
+def process_audio_chunk(audio_chunk):
+    combined_chunk = AudioSegment.empty()
+    for audio_file in audio_chunk:
+        try:
+            combined_chunk += AudioSegment.from_file(audio_file)
+        except Exception as e:
+            print(f"Error processing file {audio_file}: {e}")
+    return combined_chunk
+
+def combine_audio(audio_list, chapter_number=None, output_dir="."):
+    # Define the duration of silence in milliseconds (e.g., 1000 milliseconds = 1 second)
+    silence_duration = 2000  # 2 seconds of silence
+
+    # Calculate an appropriate chunk size based on the number of audio files
+    num_files = len(audio_list)
+    if num_files <= 0:
+        print("No audio files to combine.")
+        return
+
+    # Use a heuristic to determine chunk size
+    chunk_size = min(3, num_files)  # Example: Minimum chunk size of 3 or number of files
+
+    # Split audio_list into chunks
+    audio_chunks = [
+        audio_list[i:i + chunk_size] for i in range(0, len(audio_list), chunk_size)
+    ]
+
+    # Concurrently process each chunk
+    with ThreadPoolExecutor() as executor, \
+         alive_bar(len(audio_chunks), title=f"Combining Chapter {chapter_number + 1}") as bar:
+        
+        # Submit tasks to executor for concurrent processing
+        futures = [executor.submit(process_audio_chunk, chunk) for chunk in audio_chunks]
+        
+        # Retrieve results and combine chunks into final_audio
+        final_audio = AudioSegment.empty()
+        for future in futures:
+            chunk_audio = future.result()
+            final_audio += chunk_audio
+            bar()
+
+    # Add silence at the end of the combined audio
+    final_audio += AudioSegment.silent(duration=silence_duration)
+
+    # Export the combined audio to a file
+    combined_filename = os.path.join(output_dir, f"chapter_{chapter_number + 1}.flac")
+    final_audio.export(combined_filename, format="flac")
+    print(f"Combined audio for Chapter {chapter_number + 1} saved as {combined_filename}")
+
+    # Optionally, clean up individual audio files
+    for chunk in audio_chunks:
+        for audio_file in chunk:
+            os.remove(audio_file)
 
 def process_chapter(chapter, chapter_number, total_chapters):
     sentences = [sentence for sentence in chapter.split("\n") if sentence.strip()]
-    tcount = sum(len([s for s in total_chapters[i].split("\n") if s.strip()]) for i in range(chapter_number))
+    tcount = sum(
+        len([s for s in total_chapters[i].split("\n") if s.strip()])
+        for i in range(chapter_number)
+    )
 
-    print(Fore.GREEN + f"Starting Chapter {chapter_number + 1}: {sentences[0][:50]}..." if sentences else f"Starting Chapter {chapter_number + 1}: Empty Chapter")
+    print(
+        Fore.GREEN + f"Starting Chapter {chapter_number + 1}: {sentences[0][:50]}..."
+        if sentences
+        else f"Starting Chapter {chapter_number + 1}: Empty Chapter"
+    )
 
     # Check for existing files in output directory and mark them as processed
     for file in os.listdir(output_dir):
         if file.endswith(".flac"):
             processed_files[os.path.join(output_dir, file)] = True
 
-    sentence_dict = {i: {"text": sentence, "filename": os.path.join(output_dir, f"pg{tcount + i}.flac"), "processed": False} for i, sentence in enumerate(sentences)}
+    sentence_dict = {
+        i: {
+            "text": sentence,
+            "filename": os.path.join(output_dir, f"pg{tcount + i}.flac"),
+            "processed": False,
+        }
+        for i, sentence in enumerate(sentences)
+    }
 
-    with ThreadPoolExecutor() as executor, alive_bar(len(sentences), title=f"Processing Chapter {chapter_number + 1}") as bar:
-        futures = {executor.submit(read_sentence, sentence_dict[i]["text"], tcount + i): i for i in sentence_dict}
+    with ThreadPoolExecutor() as executor, alive_bar(
+        len(sentences), title=f"Processing Chapter {chapter_number + 1}"
+    ) as bar:
+        futures = {
+            executor.submit(read_sentence, sentence_dict[i]["text"], tcount + i): i
+            for i in sentence_dict
+        }
         for future in as_completed(futures):
             try:
                 result = future.result()
@@ -101,121 +203,126 @@ def process_chapter(chapter, chapter_number, total_chapters):
                 print(Fore.RED + f"Generated an exception: {e}")
             bar()
 
-    audio_files = [sentence_dict[i]["filename"] for i in sentence_dict if sentence_dict[i]["processed"]]
+    # List of audio files to be combined
+    audio_files = [
+        sentence_dict[i]["filename"]
+        for i in sentence_dict
+        if sentence_dict[i]["processed"]
+    ]
+    combine_audio(audio_files,chapter_number,output_dir)
 
-    combined_audio = AudioSegment.empty()
-    with alive_bar(len(audio_files), title=f"Combining Chapter {chapter_number + 1}") as bar:
-        for audio_file in audio_files:
-            try:
-                combined_audio += AudioSegment.from_file(audio_file)
-            except Exception as e:
-                print(Fore.RED + f"Error processing file {audio_file}: {e}")
-            bar()
-
-    combined_filename = os.path.join(output_dir, f"chapter_{chapter_number + 1}.flac")
-    combined_audio.export(combined_filename, format="flac")
-    print(Fore.CYAN + f"Combined audio for Chapter {chapter_number + 1} saved as {combined_filename}")
-
-    for audio_file in audio_files:
-        os.remove(audio_file)
 
 def clean_up():
     for file in os.listdir(output_dir):
         if file.startswith("pg"):
             os.remove(os.path.join(output_dir, file))
 
+
 def chapter_data(content):
     data = []
     temp_sent = content.split("\n")
     for line in temp_sent:
         if line.startswith("# "):
-            data.append(line.replace("# ",""))
+            data.append(line.replace("# ", ""))
         elif line.startswith("Title:"):
-            book_title = line.replace("Title:","").strip()
+            book_title = line.replace("Title:", "").strip()
     return data
 
 
-def read_book(content,cover_img=None):
+def read_book(content, cover_img=None):
     chapter_data(content)
     print(Fore.BLUE + "Content before splitting into chapters:\n", content[:500], "...")
     chapters = content.split("# ", 1)[-1].split("# ")
     print(Fore.BLUE + f"Number of chapters found: {len(chapters)}")
     for chapter_number, chapter in enumerate(chapters):
-        print(Fore.BLUE + f"Chapter {chapter_number + 1} content preview:\n", chapter[:200], "...")
+        print(
+            Fore.BLUE + f"Chapter {chapter_number + 1} content preview:\n",
+            chapter[:200],
+            "...",
+        )
         process_chapter(chapter, chapter_number, chapters)
     clean_up()
     # Make into m4b audiobook and merge files
-    file_list = [os.path.join(output_dir, f) for f in os.listdir(output_dir) if (f.endswith(".flac") and f.startswith("chapter"))]
+    file_list = [
+        os.path.join(output_dir, f)
+        for f in os.listdir(output_dir)
+        if (f.endswith(".flac") and f.startswith("chapter"))
+    ]
     chapterfile.create(chapter_data(content))
-    print(Fore.GREEN+"Merging Files")
+    print(Fore.GREEN + "Merging Files")
     time.sleep(2)
-    m4b_tool.merge(output_dir,os.path.join(output_dir,"book.m4b"),cover_img)
+    m4b_tool.merge(output_dir, os.path.join(output_dir, "book.m4b"), cover_img)
 
-def add_metadata(xml_file, input_m4b=None, output_m4b=None,book_img=None):
+
+def add_metadata(xml_file, input_m4b=None, output_m4b=None, book_img=None):
     if input_m4b is None:
-            input_m4b = os.path.join(output_dir, "book.m4b")
+        input_m4b = os.path.join(output_dir, "book.m4b")
     if output_m4b is None:
         output_m4b = os.path.join(output_dir, "out.m4b")
     if book_img is None:
         book_img = "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
+
     def extract_metadata_from_opf(xml_file):
         # Parse the XML file
         tree = ET.parse(xml_file)
         root = tree.getroot()
-        
+
         # Namespace dictionary for ElementTree
         ns = {
-            'dc': 'http://purl.org/dc/elements/1.1/',
-            'opf': 'http://www.idpf.org/2007/opf'
+            "dc": "http://purl.org/dc/elements/1.1/",
+            "opf": "http://www.idpf.org/2007/opf",
         }
-        
+
         # Extract metadata
-        title = root.findtext('.//dc:title', namespaces=ns)
-        author = root.findtext('.//dc:creator', namespaces=ns)
-        description = root.findtext('.//dc:description', namespaces=ns)
+        title = root.findtext(".//dc:title", namespaces=ns)
+        author = root.findtext(".//dc:creator", namespaces=ns)
+        description = root.findtext(".//dc:description", namespaces=ns)
         cover_image_href = None
         cover_reference = root.find('.//guide/reference[@type="cover"]', ns)
         if cover_reference is not None:
-            cover_image_href = cover_reference.attrib.get('href')
-        
+            cover_image_href = cover_reference.attrib.get("href")
+
         return title, author, description, cover_image_href
-    
+
     def add_metadata_to_m4b(input_file, output_file, title, author, description):
         # Constructing the ffmpeg command
         ffmpeg_command = [
             "ffmpeg",
-            "-i", input_file,
-            "-metadata", f"title={title}",
-            "-metadata", f"author={author}",
-            "-metadata", f"description={description}",
-            "-metadata", f"album={title}",
-            "-metadata", f"artist={author}",
+            "-i",
+            input_file,
+            "-metadata",
+            f"title={title}",
+            "-metadata",
+            f"author={author}",
+            "-metadata",
+            f"description={description}",
+            "-metadata",
+            f"album={title}",
+            "-metadata",
+            f"artist={author}",
         ]
-        
-        ffmpeg_command.extend([
-            "-c", "copy",
-            "-map_metadata", "0",
-            output_file
-        ])
-        
+
+        ffmpeg_command.extend(["-c", "copy", "-map_metadata", "0", output_file])
+
         # Running the command
         subprocess.run(ffmpeg_command, check=True)
-    
+
     # Extract metadata from OPF XML file
     title, author, description, cover_image_href = extract_metadata_from_opf(xml_file)
 
-    output_file = (os.path.join(final_dir,(title+".m4b")))
+    output_file = os.path.join(final_dir, (title + ".m4b"))
     # Add metadata to M4B file
     add_metadata_to_m4b(input_m4b, output_file, title, author, description)
-    add_cover(book_img,output_file)
+    add_cover(book_img, output_file)
 
 
-def resize_image_to_square_top(image_path, size):
+def resize_image_to_square_top(image_path, size=None):
     # Open the image file
     img = Image.open(image_path)
-
     # Get original dimensions
     width, height = img.size
+    if size is None:
+        size = width
 
     # Calculate coordinates for cropping
     left = 0
@@ -231,11 +338,14 @@ def resize_image_to_square_top(image_path, size):
 
     return img
 
+
 def add_cover(cover_img, filename):
     try:
         if os.path.isfile(cover_img):
             # Resize cover image to a square with content aligned to top
-            resized_img = resize_image_to_square_top(cover_img, 1400)  # Adjust square size as needed
+            resized_img = resize_image_to_square_top(
+                cover_img
+            )  # Adjust square size as needed
 
             # Save resized image to a temporary file
             temp_path = "temp_cover.jpg"
@@ -256,7 +366,6 @@ def add_cover(cover_img, filename):
         print(f"Error adding cover image: {str(e)}")
 
 
-
 def main():
     file_path = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
     output_dir = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/output"
@@ -265,33 +374,49 @@ def main():
     print("started")
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
-    
+
     # Argument parsing
-    parser = argparse.ArgumentParser(description='Process some files.')
-    parser.add_argument('-f', '--file-path', type=str, default=file_path,
-                        help='Path to the input text file')
-    parser.add_argument('-m', '--metadata-opf', type=str, default=metadata_opf,
-                        help='Path to the metadata OPF file')
-    parser.add_argument('-c', '--cover-img', type=str, default=cover_img,
-                        help='Path to the cover image')
-    
+    parser = argparse.ArgumentParser(description="Process some files.")
+    parser.add_argument(
+        "-f",
+        "--file-path",
+        type=str,
+        default=file_path,
+        help="Path to the input text file",
+    )
+    parser.add_argument(
+        "-m",
+        "--metadata-opf",
+        type=str,
+        default=metadata_opf,
+        help="Path to the metadata OPF file",
+    )
+    parser.add_argument(
+        "-c", "--cover-img", type=str, default=cover_img, help="Path to the cover image"
+    )
+
     args = parser.parse_args()
-    
+
     # Use the parsed arguments or defaults
     file_path = args.file_path
     metadata_opf = args.metadata_opf
     cover_img = args.cover_img
-    
+    print(f"{file_path}")
     # Read text file content
-    with open(file_path, "r") as file_txt:
-        file_content = file_txt.read()
+    
     # Process your file content and metadata
     if file_path.endswith(".txt"):
-        read_book(file_content,cover_img)
+        with open(file_path, "r") as file_txt:
+            file_content = file_txt.read()
+        read_book(file_content, cover_img)
         add_metadata(metadata_opf, None, None, cover_img)
     elif file_path.endswith(".epub"):
-        pass
+        book = epub.read_epub(file_path)
+        export(book, file_path)
+        exit()
     # Remove outdir
     shutil.rmtree(output_dir, ignore_errors=True)
-    
-main()
+
+
+if __name__ == "__main__":
+    main()
