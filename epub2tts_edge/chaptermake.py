@@ -3,7 +3,7 @@ import os
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
-from alive_progress import alive_bar
+
 
 def create(chapter_titles, file_list, output_file, output_dir):
     try:
@@ -11,11 +11,22 @@ def create(chapter_titles, file_list, output_file, output_dir):
         def get_duration(file_path):
             try:
                 result = subprocess.run(
-                    ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", file_path],
-                    capture_output=True, text=True, check=True
+                    [
+                        "ffprobe",
+                        "-v",
+                        "error",
+                        "-show_entries",
+                        "format=duration",
+                        "-of",
+                        "json",
+                        file_path,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=True,
                 )
                 duration_json = json.loads(result.stdout)
-                duration_seconds = float(duration_json['format']['duration'])
+                duration_seconds = float(duration_json["format"]["duration"])
                 duration_ms = int(duration_seconds * 1000)
                 return duration_ms
             except subprocess.CalledProcessError as e:
@@ -33,7 +44,9 @@ def create(chapter_titles, file_list, output_file, output_dir):
 
         def convert_to_m4a(file_path):
             try:
-                m4a_file_path = os.path.join(output_dir, os.path.basename(file_path).replace(".flac", ".m4a"))
+                m4a_file_path = os.path.join(
+                    output_dir, os.path.basename(file_path).replace(".flac", ".m4a")
+                )
 
                 # Check if the output M4A file already exists
                 if os.path.exists(m4a_file_path):
@@ -43,30 +56,32 @@ def create(chapter_titles, file_list, output_file, output_dir):
                 # Run ffmpeg command to convert FLAC to M4A
                 subprocess.run(
                     ["ffmpeg", "-i", file_path, "-c:a", "aac", m4a_file_path],
-                    check=True
+                    check=True,
                 )
 
                 print(f"Converted {file_path} to {m4a_file_path}")
                 return m4a_file_path
-                
+
             except subprocess.CalledProcessError as e:
                 print(f"Error occurred during conversion of {file_path}: {e}")
                 return None
 
         # Using ThreadPoolExecutor to convert files concurrently
-        with alive_bar(len(file_list)) as bar:
-            with ThreadPoolExecutor(max_workers=4) as executor:
-                futures = [executor.submit(convert_to_m4a, file_path) for file_path in file_list]
-                for future in as_completed(futures):
-                    result = future.result()
-                    if result:
-                        m4a_files.append(result)
-                        bar()
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [
+                executor.submit(convert_to_m4a, file_path) for file_path in file_list
+            ]
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    m4a_files.append(result)
 
         # Generate chapter metadata
         metadata = ";FFMETADATA1\n"
         start_time = 0
-        m4a_files.sort(key=lambda x: int(os.path.splitext(os.path.basename(x))[0].split('_')[1]))
+        m4a_files.sort(
+            key=lambda x: int(os.path.splitext(os.path.basename(x))[0].split("_")[1])
+        )
         for title, file_path in zip(chapter_titles, m4a_files):
             duration = get_duration(file_path)
             end_time = start_time + duration
@@ -87,8 +102,23 @@ def create(chapter_titles, file_list, output_file, output_dir):
         # Combine audio files and apply chapter metadata to create an M4B file
         try:
             subprocess.run(
-                ["ffmpeg", "-f", "concat", "-safe", "0", "-i", input_file, "-i", metadata_file, "-map_metadata", "1", "-c", "copy", output_file],
-                check=True
+                [
+                    "ffmpeg",
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    input_file,
+                    "-i",
+                    metadata_file,
+                    "-map_metadata",
+                    "1",
+                    "-c",
+                    "copy",
+                    output_file,
+                ],
+                check=True,
             )
             print(f"Output file created successfully: {output_file}")
         except subprocess.CalledProcessError as e:
