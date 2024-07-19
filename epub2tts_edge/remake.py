@@ -380,6 +380,7 @@ def add_cover(cover_img, filename):
 
 
 def main():
+    # Define paths
     start_time = time.time()
     file_path = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
     output_dir = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/output"
