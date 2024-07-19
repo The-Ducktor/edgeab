@@ -8,7 +8,6 @@ from alive_progress import alive_bar
 import time
 import re
 from colorama import init, Fore, Style
-import chapterfile
 import m4b_tool
 import xml.etree.ElementTree as ET
 import subprocess
@@ -17,6 +16,8 @@ import shutil
 from mutagen import mp4
 import sys
 from PIL import Image
+import chaptermake
+
 # Initialize colorama
 init(autoreset=True)
 
@@ -29,9 +30,9 @@ processed_files = {}
 final_dir = os.getcwd()
 
 
-
 def remove_special_characters(input_string):
     return re.sub("[◇]+", "", input_string)
+
 
 def append_silence(tempfile, duration=1200):
     if not os.path.exists(tempfile) or os.path.getsize(tempfile) == 0:
@@ -44,8 +45,8 @@ def append_silence(tempfile, duration=1200):
     return True
 
 
-async def run_tts(sentence, filename):
-    communicate = edge_tts.Communicate(sentence, "en-US-BrianNeural")
+async def run_tts(sentence, filename, voice="en-US-BrianNeural"):
+    communicate = edge_tts.Communicate(sentence, voice)
     await communicate.save(filename)
     return append_silence(filename)
 
@@ -53,14 +54,13 @@ async def run_tts(sentence, filename):
 SILENCE_DURATION = 1600
 
 
-def read_sentence(sentence, tcount, retries=3):
+def read_sentence(sentence, tcount, retries=3, voice="en-US-BrianNeural"):
     filename = os.path.join(output_dir, f"pg{tcount}.flac")
 
     # Check if already processed
     if filename in processed_files:
         print(Fore.YELLOW + "Already exists")
         return filename
-
     attempt = 0
     while attempt < retries:
         try:
@@ -71,7 +71,7 @@ def read_sentence(sentence, tcount, retries=3):
                 processed_files[filename] = True
                 return filename
 
-            asyncio.run(run_tts(sentence, filename))
+            asyncio.run(run_tts(sentence, filename, voice))
             if os.path.exists(filename) and os.path.getsize(filename) > 0:
                 processed_files[filename] = True
                 return filename
@@ -167,7 +167,7 @@ def combine_audio(audio_list, chapter_number=None, output_dir="."):
             os.remove(audio_file)
 
 
-def process_chapter(chapter, chapter_number, total_chapters):
+def process_chapter(chapter, chapter_number, total_chapters, voice="en-US-BrianNeural"):
     sentences = [sentence for sentence in chapter.split("\n") if sentence.strip()]
     tcount = sum(
         len([s for s in total_chapters[i].split("\n") if s.strip()])
@@ -190,10 +190,10 @@ def process_chapter(chapter, chapter_number, total_chapters):
             "text": sentence,
             "filename": os.path.join(output_dir, f"pg{tcount + i}.flac"),
             "processed": False,
+            "voice": voice,
         }
         for i, sentence in enumerate(sentences)
     }
-
     with ThreadPoolExecutor() as executor, alive_bar(
         len(sentences), title=f"Processing Chapter {chapter_number + 1}"
     ) as bar:
@@ -242,7 +242,7 @@ def read_book(content, cover_img=None):
     chapter_data(content)
     print(Fore.BLUE + "Content before splitting into chapters:\n", content[:500], "...")
     chapters = content.split("# ", 1)[-1].split("# ")
-    print(Fore.BLUE + f"Number of chapters found: {len(chapters)}")
+    print(Fore.BLUE + f"Number of chapters parts found: {len(chapters)}")
     for chapter_number, chapter in enumerate(chapters):
         print(
             Fore.BLUE + f"Chapter {chapter_number + 1} content preview:\n",
@@ -257,10 +257,14 @@ def read_book(content, cover_img=None):
         for f in os.listdir(output_dir)
         if (f.endswith(".flac") and f.startswith("chapter"))
     ]
-    chapterfile.create(chapter_data(content))
     print(Fore.GREEN + "Merging Files")
     time.sleep(2)
-    m4b_tool.merge(output_dir, os.path.join(output_dir, "book.m4b"), cover_img)
+    chaptermake.create(
+        chapter_data(content),
+        file_list,
+        os.path.join(output_dir, "book.m4b"),
+        output_dir,
+    )
 
 
 def add_metadata(xml_file, input_m4b=None, output_m4b=None, book_img=None):
@@ -376,11 +380,13 @@ def add_cover(cover_img, filename):
 
 
 def main():
+    start_time = time.time()
     file_path = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
     output_dir = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/output"
     metadata_opf = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/metadata.opf"
     cover_img = "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
     print("started")
+    is_debug = False
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
 
@@ -424,8 +430,16 @@ def main():
         export(book, file_path)
         exit()
     # Remove outdir
-    shutil.rmtree(output_dir, ignore_errors=True)
+    if not is_debug:
+        shutil.rmtree(output_dir, ignore_errors=True)
+    # Record the end time
+    end_time = time.time()
 
+    # Calculate the total time taken
+    total_time = end_time - start_time
+
+    # Print the total time taken
+    print(f"Total time taken: {total_time:.2f} seconds")
 
 if __name__ == "__main__":
     main()
