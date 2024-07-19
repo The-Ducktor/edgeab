@@ -1,10 +1,12 @@
-beautifulsoup4
+alive-progress
+asyncio
+bs4
+chaptermake
+colorama
 ebooklib
 edge-tts
 lxml
 mutagen
-nltk
-pillow
+Pillow
 pydub
-setuptools
-tqdm
+xmltodict
