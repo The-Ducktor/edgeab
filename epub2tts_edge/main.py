@@ -8,13 +8,11 @@ from alive_progress import alive_bar
 import time
 import re
 from colorama import init, Fore, Style
-import m4b_tool
 import xml.etree.ElementTree as ET
 import subprocess
 import argparse
 import shutil
 from mutagen import mp4
-import sys
 from PIL import Image
 import chaptermake
 
@@ -380,6 +378,7 @@ def add_cover(cover_img, filename):
 
 
 def main():
+    # Define paths
     start_time = time.time()
     file_path = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
     output_dir = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/output"
@@ -440,6 +439,7 @@ def main():
 
     # Print the total time taken
     print(f"Total time taken: {total_time:.2f} seconds")
+
 
 if __name__ == "__main__":
     main()
