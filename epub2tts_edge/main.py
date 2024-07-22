@@ -21,10 +21,10 @@ from ebooklib import epub
 init(autoreset=True)
 
 # Define paths
-file_path = "~/Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
-output_dir = "~/Documents/Git/epub2tts-edge/epub2tts_edge/output"
-metadata_opf = "~/Documents/Git/epub2tts-edge/epub2tts_edge/metadata.opf"
-cover_img = "~/Documents/Git/devstuff/smartphone.jpg"
+file_path = "/Users/jacks//Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
+output_dir = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/output"
+metadata_opf = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/metadata.opf"
+cover_img = "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
 processed_files = {}
 final_dir = os.getcwd()
 voice = "en-US-BrianNeural"
@@ -297,7 +297,7 @@ def add_metadata(xml_file, input_m4b=None, output_m4b=None, book_img=None):
     if output_m4b is None:
         output_m4b = os.path.join(output_dir, "out.m4b")
     if book_img is None:
-        book_img = "~/Documents/Git/devstuff/smartphone.jpg"
+        book_img = "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
 
     def extract_metadata_from_opf(xml_file):
         # Parse the XML file
@@ -451,9 +451,9 @@ def add_cover(cover_img, filename):
 def main():
     start_time = time.time()
     default_file_path = (
-        "~/Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
+        "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
     )
-    output_dir = "~/Documents/Git/epub2tts-edge/epub2tts_edge/output"
+    output_dir = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/output"
     default_metadata_opf = (
         f"{
             os.path.join(
@@ -462,7 +462,7 @@ def main():
         }"
     )
     default_cover_img = (
-        "~/Documents/Git/devstuff/smartphone.jpg"
+        "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
     )
     print("started")
     is_debug = False
