@@ -321,81 +321,72 @@ def add_metadata(xml_file, input_m4b=None, output_m4b=None, book_img=None):
 
         return title, author, description, cover_image_href
 
-
-def add_metadata_to_m4b(input_file, output_file, title, author, description):
-    # Constructing the ffmpeg command
-    ffmpeg_command = [
-        "ffmpeg",
-        "-i",
-        input_file,
-        "-metadata",
-        f"title={title}",
-        "-metadata",
-        f"author={author}",
-        "-metadata",
-        f"description={description}",
-        "-metadata",
-        f"album={title}",
-        "-metadata",
-        f"artist={author}",
-        "-c",
-        "copy",
-        "-map_metadata",
-        "0",
-        output_file,
-    ]
-
-    # Running the command
-    subprocess.run(ffmpeg_command, check=True)
-
-    # Retrieve and print metadata using ffprobe
-    ffprobe_command = [
-        "ffprobe",
-        "-v",
-        "error",
-        "-show_entries",
-        "format_tags",
-        "-of",
-        "default=noprint_wrappers=1:nokey=1",
-        output_file,
-    ]
-
-    metadata_output = subprocess.check_output(ffprobe_command, universal_newlines=True)
-
-    # Print basic stats
-    print("Metadata added:")
-    for line in metadata_output.strip().split("\n"):
-        key, value = line.split("=")
-        print(f"{key}: {value}")
-
-    # To get basic stats like duration and bitrate
-    ffprobe_stats_command = [
-        "ffprobe",
-        "-v",
-        "error",
-        "-show_entries",
-        "format=duration,bit_rate",
-        "-of",
-        "default=noprint_wrappers=1:nokey=1",
-        output_file,
-    ]
-
-    stats_output = subprocess.check_output(
-        ffprobe_stats_command, universal_newlines=True
-    )
-
-    print("\nBasic stats:")
-    duration, bitrate = stats_output.strip().split("\n")
-    print(f"Duration: {duration} seconds")
-    print(f"Bitrate: {bitrate} bps")
-
-    # Extract metadata from OPF XML file
     title, author, description, cover_image_href = extract_metadata_from_opf(xml_file)
 
+    def add_metadata_to_m4b(input_file, output_file, title, author, description):
+        # Constructing the ffmpeg command
+        ffmpeg_command = [
+            "ffmpeg",
+            "-i",
+            input_file,
+            "-metadata",
+            f"title={title}",
+            "-metadata",
+            f"author={author}",
+            "-metadata",
+            f"description={description}",
+            "-metadata",
+            f"album={title}",
+            "-metadata",
+            f"artist={author}",
+            "-c",
+            "copy",
+            "-map_metadata",
+            "0",
+            output_file,
+        ]
+
+        # Running the command
+        subprocess.run(ffmpeg_command, check=True)
+
+        # Retrieve and print metadata using ffprobe
+        ffprobe_command = [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format_tags",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            output_file,
+        ]
+
+        metadata_output = subprocess.check_output(ffprobe_command, universal_newlines=True)
+
+
+        # To get basic stats like duration and bitrate
+        ffprobe_stats_command = [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration,bit_rate",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            output_file,
+        ]
+
+        stats_output = subprocess.check_output(
+            ffprobe_stats_command, universal_newlines=True
+        )
+
+        print("\nBasic stats:")
+        duration, bitrate = stats_output.strip().split("\n")
+        print(f"Duration: {duration} seconds")
+        print(f"Bitrate: {bitrate} bps")
+
     output_file = os.path.join(final_dir, (title + ".m4b"))
-    # Add metadata to M4B file
     add_metadata_to_m4b(input_m4b, output_file, title, author, description)
-    add_cover(book_img, output_file)
 
 
 def resize_image_to_square_top(image_path, size=None):
