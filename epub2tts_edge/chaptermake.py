@@ -3,6 +3,8 @@ import os
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
+from ffmpeg_progress_yield import FfmpegProgress
+from alive_progress import alive_bar
 
 
 def create(chapter_titles, file_list, output_file, output_dir):
@@ -53,11 +55,11 @@ def create(chapter_titles, file_list, output_file, output_dir):
                     print(f"{m4a_file_path} already exists. Skipping conversion.")
                     return m4a_file_path
 
-                # Run ffmpeg command to convert FLAC to M4A
-                subprocess.run(
-                    ["ffmpeg", "-i", file_path, "-c:a", "aac", m4a_file_path],
-                    check=True,
-                )
+                # Run ffmpeg command to convert FLAC to M4A with progress tracking
+                command = ["ffmpeg", "-i", file_path, "-c:a", "aac", m4a_file_path]
+                ff = FfmpegProgress(command)
+                for progress in ff.run_command_with_progress():
+                    pass
 
                 print(f"Converted {file_path} to {m4a_file_path}")
                 return m4a_file_path
@@ -66,8 +68,8 @@ def create(chapter_titles, file_list, output_file, output_dir):
                 print(f"Error occurred during conversion of {file_path}: {e}")
                 return None
 
-        # Using ThreadPoolExecutor to convert files concurrently
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        # Using ThreadPoolExecutor to convert files concurrently with a progress bar tracking the number of files completed
+        with ThreadPoolExecutor(max_workers=4) as executor, alive_bar(len(file_list), title="Converting files") as bar:
             futures = [
                 executor.submit(convert_to_m4a, file_path) for file_path in file_list
             ]
@@ -75,6 +77,7 @@ def create(chapter_titles, file_list, output_file, output_dir):
                 result = future.result()
                 if result:
                     m4a_files.append(result)
+                bar()
 
         # Generate chapter metadata
         metadata = ";FFMETADATA1\n"
@@ -99,27 +102,28 @@ def create(chapter_titles, file_list, output_file, output_dir):
             for file_path in m4a_files:
                 f.write(f"file '{os.path.abspath(file_path)}'\n")
 
-        # Combine audio files and apply chapter metadata to create an M4B file
+        # Combine audio files and apply chapter metadata to create an M4B file with progress tracking
         try:
-            subprocess.run(
-                [
-                    "ffmpeg",
-                    "-f",
-                    "concat",
-                    "-safe",
-                    "0",
-                    "-i",
-                    input_file,
-                    "-i",
-                    metadata_file,
-                    "-map_metadata",
-                    "1",
-                    "-c",
-                    "copy",
-                    output_file,
-                ],
-                check=True,
-            )
+            command = [
+                "ffmpeg",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                input_file,
+                "-i",
+                metadata_file,
+                "-map_metadata",
+                "1",
+                "-c",
+                "copy",
+                output_file,
+            ]
+            ff = FfmpegProgress(command)
+            for progress in ff.run_command_with_progress():
+                pass
+
             print(f"Output file created successfully: {output_file}")
         except subprocess.CalledProcessError as e:
             print(f"Error occurred during M4B file creation: {e}")

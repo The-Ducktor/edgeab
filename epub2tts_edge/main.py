@@ -1,5 +1,4 @@
 import os
-from alive_progress.core.hook_manager import logging
 import edge_tts
 import asyncio
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -7,7 +6,7 @@ from pydub import AudioSegment
 from alive_progress import alive_bar
 import time
 import re
-from colorama import init, Fore, Style
+from colorama import init, Fore
 import xml.etree.ElementTree as ET
 import subprocess
 import argparse
@@ -22,10 +21,10 @@ from ebooklib import epub
 init(autoreset=True)
 
 # Define paths
-file_path = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
-output_dir = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/output"
-metadata_opf = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/metadata.opf"
-cover_img = "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
+file_path = "~/Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
+output_dir = "~/Documents/Git/epub2tts-edge/epub2tts_edge/output"
+metadata_opf = "~/Documents/Git/epub2tts-edge/epub2tts_edge/metadata.opf"
+cover_img = "~/Documents/Git/devstuff/smartphone.jpg"
 processed_files = {}
 final_dir = os.getcwd()
 voice = "en-US-BrianNeural"
@@ -217,8 +216,8 @@ def process_chapter(
                 read_sentence,
                 sentence_dict[i]["text"],
                 tcount + i,
-                3,
-                sentence_dict[i]["voice"]
+                3,  # retries
+                sentence_dict[i]["voice"],
             ): i
             for i in sentence_dict
         }
@@ -265,7 +264,6 @@ def chapter_data(content):
 
 
 def read_book(content, cover_img=None, voice="en-US-BrianNeural"):
-    chapter_data(content)
     print(Fore.BLUE + "Content before splitting into chapters:\n", content[:500], "...")
     chapters = content.split("# ", 1)[-1].split("# ")
     print(Fore.BLUE + f"Number of chapters parts found: {len(chapters)}")
@@ -299,7 +297,7 @@ def add_metadata(xml_file, input_m4b=None, output_m4b=None, book_img=None):
     if output_m4b is None:
         output_m4b = os.path.join(output_dir, "out.m4b")
     if book_img is None:
-        book_img = "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
+        book_img = "~/Documents/Git/devstuff/smartphone.jpg"
 
     def extract_metadata_from_opf(xml_file):
         # Parse the XML file
@@ -323,28 +321,73 @@ def add_metadata(xml_file, input_m4b=None, output_m4b=None, book_img=None):
 
         return title, author, description, cover_image_href
 
-    def add_metadata_to_m4b(input_file, output_file, title, author, description):
-        # Constructing the ffmpeg command
-        ffmpeg_command = [
-            "ffmpeg",
-            "-i",
-            input_file,
-            "-metadata",
-            f"title={title}",
-            "-metadata",
-            f"author={author}",
-            "-metadata",
-            f"description={description}",
-            "-metadata",
-            f"album={title}",
-            "-metadata",
-            f"artist={author}",
-        ]
 
-        ffmpeg_command.extend(["-c", "copy", "-map_metadata", "0", output_file])
+def add_metadata_to_m4b(input_file, output_file, title, author, description):
+    # Constructing the ffmpeg command
+    ffmpeg_command = [
+        "ffmpeg",
+        "-i",
+        input_file,
+        "-metadata",
+        f"title={title}",
+        "-metadata",
+        f"author={author}",
+        "-metadata",
+        f"description={description}",
+        "-metadata",
+        f"album={title}",
+        "-metadata",
+        f"artist={author}",
+        "-c",
+        "copy",
+        "-map_metadata",
+        "0",
+        output_file,
+    ]
 
-        # Running the command
-        subprocess.run(ffmpeg_command, check=True)
+    # Running the command
+    subprocess.run(ffmpeg_command, check=True)
+
+    # Retrieve and print metadata using ffprobe
+    ffprobe_command = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format_tags",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        output_file,
+    ]
+
+    metadata_output = subprocess.check_output(ffprobe_command, universal_newlines=True)
+
+    # Print basic stats
+    print("Metadata added:")
+    for line in metadata_output.strip().split("\n"):
+        key, value = line.split("=")
+        print(f"{key}: {value}")
+
+    # To get basic stats like duration and bitrate
+    ffprobe_stats_command = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration,bit_rate",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        output_file,
+    ]
+
+    stats_output = subprocess.check_output(
+        ffprobe_stats_command, universal_newlines=True
+    )
+
+    print("\nBasic stats:")
+    duration, bitrate = stats_output.strip().split("\n")
+    print(f"Duration: {duration} seconds")
+    print(f"Bitrate: {bitrate} bps")
 
     # Extract metadata from OPF XML file
     title, author, description, cover_image_href = extract_metadata_from_opf(xml_file)
@@ -408,13 +451,19 @@ def add_cover(cover_img, filename):
 def main():
     start_time = time.time()
     default_file_path = (
-        "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
+        "~/Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
     )
-    output_dir = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/output"
+    output_dir = "~/Documents/Git/epub2tts-edge/epub2tts_edge/output"
     default_metadata_opf = (
-        "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/metadata.opf"
+        f"{
+            os.path.join(
+            final_dir, 'metadata.opf'
+        )
+        }"
     )
-    default_cover_img = "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
+    default_cover_img = (
+        "~/Documents/Git/devstuff/smartphone.jpg"
+    )
     print("started")
     is_debug = False
     os.makedirs(output_dir, exist_ok=True)
