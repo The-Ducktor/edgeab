@@ -38,6 +38,7 @@ edgeab -f "filedir" -m "opfmetafile" -c "coverimage" -v "voice"
 
 ## Author
 
-👤 **The Ducktor**
+<img src="https://onedrive.live.com/embed?resid=C5698F9578A89394%21207164&authkey=%21APBHkBWZe7Am9y4&width=256" alt="Icon" width="16" height="16">
+ **The Ducktor**
 
-- GitHub: [@aedocw](https://github.com/The-Ducktor)
+- GitHub: [@The_Ducktor](https://github.com/The-Ducktor)
