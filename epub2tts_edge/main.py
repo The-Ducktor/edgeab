@@ -21,7 +21,7 @@ from ebooklib import epub
 init(autoreset=True)
 
 # Define paths
-file_path = "/Users/jacks//Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
+file_path = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
 output_dir = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/output"
 metadata_opf = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/metadata.opf"
 cover_img = "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
@@ -387,6 +387,7 @@ def add_metadata(xml_file, input_m4b=None, output_m4b=None, book_img=None):
 
     output_file = os.path.join(final_dir, (title + ".m4b"))
     add_metadata_to_m4b(input_m4b, output_file, title, author, description)
+    add_cover(cover_img, output_file)
 
 
 def resize_image_to_square_top(image_path, size=None):
