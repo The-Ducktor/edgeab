@@ -10,3 +10,4 @@ mutagen
 Pillow
 pydub
 xmltodict
+ffmpeg_progress_yield

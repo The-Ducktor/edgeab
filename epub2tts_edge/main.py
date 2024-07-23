@@ -1,5 +1,4 @@
 import os
-from alive_progress.core.hook_manager import logging
 import edge_tts
 import asyncio
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -7,7 +6,7 @@ from pydub import AudioSegment
 from alive_progress import alive_bar
 import time
 import re
-from colorama import init, Fore, Style
+from colorama import init, Fore
 import xml.etree.ElementTree as ET
 import subprocess
 import argparse
@@ -15,6 +14,8 @@ import shutil
 from mutagen import mp4
 from PIL import Image
 import chaptermake
+from epub_convert import export
+from ebooklib import epub
 
 # Initialize colorama
 init(autoreset=True)
@@ -26,6 +27,7 @@ metadata_opf = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/metadata.
 cover_img = "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
 processed_files = {}
 final_dir = os.getcwd()
+voice = "en-US-BrianNeural"
 
 
 def remove_special_characters(input_string):
@@ -62,7 +64,7 @@ def read_sentence(sentence, tcount, retries=3, voice="en-US-BrianNeural"):
     attempt = 0
     while attempt < retries:
         try:
-            if "◇" in sentence:
+            if any(symbol in sentence for symbol in ["◇", "◆"]):
                 print(Fore.YELLOW + "Special symbol found, adding silence")
                 silence = AudioSegment.silent(duration=SILENCE_DURATION)
                 silence.export(filename, format="flac")
@@ -165,7 +167,19 @@ def combine_audio(audio_list, chapter_number=None, output_dir="."):
             os.remove(audio_file)
 
 
-def process_chapter(chapter, chapter_number, total_chapters, voice="en-US-BrianNeural"):
+def process_chapter(
+    chapter, chapter_number, total_chapters, output_dir, voice="en-US-BrianNeural"
+):
+    # Define the output file for the chapter
+    chapter_output_file = os.path.join(output_dir, f"chapter_{chapter_number + 1}.flac")
+
+    # Check if the chapter output file already exists
+    if os.path.exists(chapter_output_file):
+        print(
+            Fore.YELLOW + f"Chapter {chapter_number + 1} already processed, skipping..."
+        )
+        return chapter_output_file  # Return the existing file
+
     sentences = [sentence for sentence in chapter.split("\n") if sentence.strip()]
     tcount = sum(
         len([s for s in total_chapters[i].split("\n") if s.strip()])
@@ -179,6 +193,7 @@ def process_chapter(chapter, chapter_number, total_chapters, voice="en-US-BrianN
     )
 
     # Check for existing files in output directory and mark them as processed
+    processed_files = {}
     for file in os.listdir(output_dir):
         if file.endswith(".flac"):
             processed_files[os.path.join(output_dir, file)] = True
@@ -192,11 +207,18 @@ def process_chapter(chapter, chapter_number, total_chapters, voice="en-US-BrianN
         }
         for i, sentence in enumerate(sentences)
     }
+
     with ThreadPoolExecutor() as executor, alive_bar(
         len(sentences), title=f"Processing Chapter {chapter_number + 1}"
     ) as bar:
         futures = {
-            executor.submit(read_sentence, sentence_dict[i]["text"], tcount + i): i
+            executor.submit(
+                read_sentence,
+                sentence_dict[i]["text"],
+                tcount + i,
+                3,  # retries
+                sentence_dict[i]["voice"],
+            ): i
             for i in sentence_dict
         }
         for future in as_completed(futures):
@@ -216,7 +238,12 @@ def process_chapter(chapter, chapter_number, total_chapters, voice="en-US-BrianN
         for i in sentence_dict
         if sentence_dict[i]["processed"]
     ]
+
+    # Combine the audio files into the chapter output file
     combine_audio(audio_files, chapter_number, output_dir)
+
+    # Return the output file for the chapter
+    return chapter_output_file
 
 
 def clean_up():
@@ -236,8 +263,7 @@ def chapter_data(content):
     return data
 
 
-def read_book(content, cover_img=None):
-    chapter_data(content)
+def read_book(content, cover_img=None, voice="en-US-BrianNeural"):
     print(Fore.BLUE + "Content before splitting into chapters:\n", content[:500], "...")
     chapters = content.split("# ", 1)[-1].split("# ")
     print(Fore.BLUE + f"Number of chapters parts found: {len(chapters)}")
@@ -247,7 +273,7 @@ def read_book(content, cover_img=None):
             chapter[:200],
             "...",
         )
-        process_chapter(chapter, chapter_number, chapters)
+        process_chapter(chapter, chapter_number, chapters, output_dir, voice)
     clean_up()
     # Make into m4b audiobook and merge files
     file_list = [
@@ -295,6 +321,8 @@ def add_metadata(xml_file, input_m4b=None, output_m4b=None, book_img=None):
 
         return title, author, description, cover_image_href
 
+    title, author, description, cover_image_href = extract_metadata_from_opf(xml_file)
+
     def add_metadata_to_m4b(input_file, output_file, title, author, description):
         # Constructing the ffmpeg command
         ffmpeg_command = [
@@ -311,20 +339,55 @@ def add_metadata(xml_file, input_m4b=None, output_m4b=None, book_img=None):
             f"album={title}",
             "-metadata",
             f"artist={author}",
+            "-c",
+            "copy",
+            "-map_metadata",
+            "0",
+            output_file,
         ]
-
-        ffmpeg_command.extend(["-c", "copy", "-map_metadata", "0", output_file])
 
         # Running the command
         subprocess.run(ffmpeg_command, check=True)
 
-    # Extract metadata from OPF XML file
-    title, author, description, cover_image_href = extract_metadata_from_opf(xml_file)
+        # Retrieve and print metadata using ffprobe
+        ffprobe_command = [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format_tags",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            output_file,
+        ]
+
+        metadata_output = subprocess.check_output(ffprobe_command, universal_newlines=True)
+
+
+        # To get basic stats like duration and bitrate
+        ffprobe_stats_command = [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration,bit_rate",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            output_file,
+        ]
+
+        stats_output = subprocess.check_output(
+            ffprobe_stats_command, universal_newlines=True
+        )
+
+        print("\nBasic stats:")
+        duration, bitrate = stats_output.strip().split("\n")
+        print(f"Duration: {duration} seconds")
+        print(f"Bitrate: {bitrate} bps")
 
     output_file = os.path.join(final_dir, (title + ".m4b"))
-    # Add metadata to M4B file
     add_metadata_to_m4b(input_m4b, output_file, title, author, description)
-    add_cover(book_img, output_file)
+    add_cover(cover_img, output_file)
 
 
 def resize_image_to_square_top(image_path, size=None):
@@ -378,66 +441,78 @@ def add_cover(cover_img, filename):
 
 
 def main():
-    # Define paths
     start_time = time.time()
-    file_path = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
+    default_file_path = (
+        "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
+    )
     output_dir = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/output"
-    metadata_opf = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/metadata.opf"
-    cover_img = "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
+    default_metadata_opf = (
+        f"{
+            os.path.join(
+            final_dir, 'metadata.opf'
+        )
+        }"
+    )
+    default_cover_img = (
+        "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
+    )
     print("started")
     is_debug = False
-    # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
 
-    # Argument parsing
     parser = argparse.ArgumentParser(description="Process some files.")
     parser.add_argument(
         "-f",
         "--file-path",
         type=str,
-        default=file_path,
+        default=default_file_path,
         help="Path to the input text file",
     )
     parser.add_argument(
         "-m",
         "--metadata-opf",
         type=str,
-        default=metadata_opf,
+        default=default_metadata_opf,
         help="Path to the metadata OPF file",
     )
     parser.add_argument(
-        "-c", "--cover-img", type=str, default=cover_img, help="Path to the cover image"
+        "-c",
+        "--cover-img",
+        type=str,
+        default=default_cover_img,
+        help="Path to the cover image",
+    )
+    parser.add_argument(
+        "-v",
+        "--voice",
+        type=str,
+        default="en-US-BrianNeural",
+        help="Voice to use for text-to-speech (default: en-US-BrianNeural)",
     )
 
     args = parser.parse_args()
-
-    # Use the parsed arguments or defaults
+    print(args)
     file_path = args.file_path
     metadata_opf = args.metadata_opf
     cover_img = args.cover_img
+    voice = args.voice
     print(f"{file_path}")
-    # Read text file content
 
-    # Process your file content and metadata
     if file_path.endswith(".txt"):
         with open(file_path, "r") as file_txt:
             file_content = file_txt.read()
-        read_book(file_content, cover_img)
+        read_book(file_content, cover_img, voice)
         add_metadata(metadata_opf, None, None, cover_img)
     elif file_path.endswith(".epub"):
         book = epub.read_epub(file_path)
         export(book, file_path)
         exit()
-    # Remove outdir
+
     if not is_debug:
         shutil.rmtree(output_dir, ignore_errors=True)
-    # Record the end time
+
     end_time = time.time()
-
-    # Calculate the total time taken
     total_time = end_time - start_time
-
-    # Print the total time taken
     print(f"Total time taken: {total_time:.2f} seconds")
 
 
