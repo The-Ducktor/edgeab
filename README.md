@@ -10,16 +10,20 @@
 - [x] Resumes where it left off if interrupted
 - [x] NOTE: epub file must be DRM-free
 
-
 ## 📖 Usage
+
 <details>
 <summary> Usage instructions</summary>
 
+convert epub to formatted txt file
+
 ```bash
-edgeab -f "filedir" -m "opfmetafile" -c "coverimage -v "voice"
+edgeab -f "epubfile"
 ```
-
-
+alteratively use [epub2tts-edge](https://github.com/aedocw/epub2tts-edge)
+```bash
+edgeab -f "filedir" -m "opfmetafile" -c "coverimage" -v "voice"
+```
 
 ## Updating
 
@@ -32,8 +36,8 @@ edgeab -f "filedir" -m "opfmetafile" -c "coverimage -v "voice"
 4. `pip install . --upgrade`
 </details>
 
-
 ## Author
 
 👤 **The Ducktor**
+
 - GitHub: [@aedocw](https://github.com/The-Ducktor)
