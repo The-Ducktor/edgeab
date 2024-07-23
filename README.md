@@ -1,42 +1,69 @@
-> epub2tts-edge is a free and open source python app to easily create a full-featured audiobook from an epub or text file using realistic text-to-speech from [Microsoft Edge TTS](https://github.com/rany2/edge-tts/).
+Here is the improved version with the acknowledgment of the original work:
+
+---
+
+> edgeab is a free and open-source Python app that easily creates a full-featured audiobook from an EPUB or text file using realistic text-to-speech from [Microsoft Edge TTS](https://github.com/rany2/edge-tts/).
+
+> Note: This project is a semi-remake of [epub2tts-edge](https://github.com/aedocw/epub2tts-edge), but it's optimized for my use case, running approximately 8x faster (or at a minimum 4-5x).
+
+- Generally takes about 10 minutes for the light novels I've tested this on from start to finished file.
 
 ## 🚀 Features
 
 - [x] Creates standard format M4B audiobook file
 - [x] Automatic chapter break detection
-- [x] Embeds cover art if specified
-- [x] Uses MS Edge for free cloud-based TTS
-- [x] Reads sentences in parallel for very fast audiobook creation
-- [x] Resumes where it left off if interrupted
-- [x] NOTE: epub file must be DRM-free
+- [x] Embeds cover art if specified (crops image to square)
+- [x] Utilizes Microsoft Edge for free cloud-based TTS
+- [x] Reads sentences in parallel for extremely fast audiobook creation (approximately 10x faster than [epub2tts-edge](https://github.com/aedocw/epub2tts-edge))
+- [x] Resumes from the last point if interrupted (kind of)
+- [x] Embeds all the fun metadata
+
+**Note:** EPUB file must be DRM-free
 
 ## 📖 Usage
 
-<details>
-<summary> Usage instructions</summary>
-
-convert epub to formatted txt file
+Convert EPUB to formatted TXT file:
 
 ```bash
 edgeab -f "epubfile"
 ```
-alteratively use [epub2tts-edge](https://github.com/aedocw/epub2tts-edge)
+
+Alternatively, use [epub2tts-edge](https://github.com/aedocw/epub2tts-edge):
+
 ```bash
 edgeab -f "filedir" -m "opfmetafile" -c "coverimage" -v "voice"
 ```
 
 ## Updating
 
-<details>
-<summary>UPDATING YOUR INSTALLATION</summary>
+1. Navigate to the repository directory:
 
-1. cd to repo directory
-2. `git pull`
-3. Activate virtual environment you installed epub2tts in if you installed in a virtual environment
-4. `pip install . --upgrade`
-</details>
+```bash
+cd /path/to/repo
+```
+
+2. Pull the latest changes:
+
+```bash
+git pull
+```
+
+3. If you installed in a virtual environment, activate it:
+
+```bash
+source /path/to/venv/bin/activate
+```
+
+4. Upgrade the installation:
+
+```bash
+pip install . --upgrade
+```
 
 ## Author
-<img src="https://onedrive.live.com/embed?resid=C5698F9578A89394%21207164&authkey=%21APBHkBWZe7Am9y4&width=256" alt="Icon" width="16" height="16"> **The Ducktor**
 
-- GitHub: [@The_Ducktor](https://github.com/The-Ducktor)
+**The Ducktor**
+
+- GitHub: [@The-Ducktor](https://github.com/The-Ducktor)
+
+---
