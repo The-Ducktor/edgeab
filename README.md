@@ -1,12 +1,10 @@
-Here is the improved version with the acknowledgment of the original work:
 
----
 
-> edgeab is a free and open-source Python app that easily creates a full-featured audiobook from an EPUB or text file using realistic text-to-speech from [Microsoft Edge TTS](https://github.com/rany2/edge-tts/).
+> edgeab is a free and open-source Python app that easily creates a full-featured audiobook from an EPUB or text file using realistic text-to-speech from [Edge-TTS](https://github.com/rany2/edge-tts/).
 
-> Note: This project is a semi-remake of [epub2tts-edge](https://github.com/aedocw/epub2tts-edge), but it's optimized for my use case, running approximately 8x faster (or at a minimum 4-5x).
+> Note: This project is a semi-remake of [epub2tts-edge](https://github.com/aedocw/epub2tts-edge), but it's optimized for my use case, running approximately 8x faster (or at a minimum 4-5x) and using calibre for metadata.
 
-- Generally takes about 10 minutes for the light novels I've tested this on from start to finished file.
+* Generally takes about 10 minutes for the light novels I've tested this on from start to finished file.
 
 ## 🚀 Features
 
@@ -16,7 +14,7 @@ Here is the improved version with the acknowledgment of the original work:
 - [x] Utilizes Microsoft Edge for free cloud-based TTS
 - [x] Reads sentences in parallel for extremely fast audiobook creation (approximately 10x faster than [epub2tts-edge](https://github.com/aedocw/epub2tts-edge))
 - [x] Resumes from the last point if interrupted (kind of)
-- [x] Embeds all the fun metadata
+- [x] Embeds all the fun metadata pulled from a calibre opf file
 
 **Note:** EPUB file must be DRM-free
 
@@ -59,6 +57,13 @@ source /path/to/venv/bin/activate
 ```bash
 pip install . --upgrade
 ```
+
+## Thanks
+
+A special thanks to the following projects that made edgeab possible:
+
+- [Microsoft Edge TTS](https://github.com/rany2/edge-tts)
+- [epub2tts-edge](https://github.com/aedocw/epub2tts-edge)
 
 ## Author
 
