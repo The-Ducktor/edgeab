@@ -62,7 +62,7 @@ pip install . --upgrade
 
 A special thanks to the following projects that made edgeab possible:
 
-- [Microsoft Edge TTS](https://github.com/rany2/edge-tts)
+- [Edge-TTS](https://github.com/rany2/edge-tts)
 - [epub2tts-edge](https://github.com/aedocw/epub2tts-edge)
 
 ## Author
