@@ -299,7 +299,7 @@ def add_metadata(xml_file, input_m4b=None, output_m4b=None, book_img=cover_img):
     if output_m4b is None:
         output_m4b = os.path.join(output_dir, "out.m4b")
     if book_img is None:
-        book_img = "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
+        book_img = os.path.join(output_dir, "cover.jpg")
 
     def extract_metadata_from_opf(xml_file):
         # Parse the XML file
@@ -464,7 +464,7 @@ def main():
         }"
     )
     print("started")
-    is_debug = True
+    is_debug = False
     os.makedirs(output_dir, exist_ok=True)
 
     parser = argparse.ArgumentParser(description="Process some files.")
