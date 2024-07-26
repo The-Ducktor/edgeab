@@ -1,21 +1,22 @@
-import os
-import edge_tts
-import asyncio
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from pydub import AudioSegment
-from alive_progress import alive_bar
-import time
-import re
-from colorama import init, Fore
-import xml.etree.ElementTree as ET
-import subprocess
 import argparse
+import asyncio
+import os
+import re
 import shutil
+import subprocess
+import time
+import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import chaptermake
+import edge_tts
+from alive_progress import alive_bar
+from colorama import Fore, init
+from ebooklib import epub
+from epub_convert import export
 from mutagen import mp4
 from PIL import Image
-import chaptermake
-from epub_convert import export
-from ebooklib import epub
+from pydub import AudioSegment
 
 # Initialize colorama
 init(autoreset=True)
@@ -24,9 +25,10 @@ init(autoreset=True)
 file_path = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
 output_dir = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/output"
 metadata_opf = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/metadata.opf"
-cover_img = "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
+
 processed_files = {}
 final_dir = os.getcwd()
+cover_img = os.path.join(final_dir,"cover.jpg")
 voice = "en-US-BrianNeural"
 
 
@@ -54,7 +56,7 @@ async def run_tts(sentence, filename, voice="en-US-BrianNeural"):
 SILENCE_DURATION = 1600
 
 
-def read_sentence(sentence, tcount, retries=3, voice="en-US-BrianNeural"):
+def read_sentence(sentence, tcount, retries=5, voice="en-US-BrianNeural"):
     filename = os.path.join(output_dir, f"pg{tcount}.flac")
 
     # Check if already processed
@@ -291,7 +293,7 @@ def read_book(content, cover_img=None, voice="en-US-BrianNeural"):
     )
 
 
-def add_metadata(xml_file, input_m4b=None, output_m4b=None, book_img=None):
+def add_metadata(xml_file, input_m4b=None, output_m4b=None, book_img=cover_img):
     if input_m4b is None:
         input_m4b = os.path.join(output_dir, "book.m4b")
     if output_m4b is None:
@@ -387,6 +389,7 @@ def add_metadata(xml_file, input_m4b=None, output_m4b=None, book_img=None):
 
     output_file = os.path.join(final_dir, (title + ".m4b"))
     add_metadata_to_m4b(input_m4b, output_file, title, author, description)
+    print(cover_img)
     add_cover(cover_img, output_file)
 
 
@@ -454,10 +457,14 @@ def main():
         }"
     )
     default_cover_img = (
-        "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
+        f"{
+            os.path.join(
+            final_dir, 'cover.jpg'
+        )
+        }"
     )
     print("started")
-    is_debug = False
+    is_debug = True
     os.makedirs(output_dir, exist_ok=True)
 
     parser = argparse.ArgumentParser(description="Process some files.")
