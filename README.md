@@ -29,7 +29,7 @@ edgeab -f "epubfile"
 Alternatively, use [epub2tts-edge](https://github.com/aedocw/epub2tts-edge):
 
 ```bash
-edgeab -f "filedir" -m "opfmetafile" -c "coverimage" -v "voice"
+edgeab -f "gen-file" -m "opfmetafile" -c "coverimage" -v "voice"
 ```
 
 ## Updating
