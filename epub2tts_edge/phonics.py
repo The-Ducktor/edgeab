@@ -23,7 +23,12 @@ _phonics = {
     "Kurobe": "Koo-roh-beh",
     "Geld": "Geld",
     "Rigurd": "Ree-gurd",
-    "Gabiru": "Gah-bee-roo"
+    "Gabiru": "Gah-bee-roo",
+    "Hinata Sakaguchi": "Hee-nah-tah Sah-kah-goo-chee",
+    "Hinata": "Hee-nah-tah",
+    "Karin": "Kah-rin",
+    "Jura Tempest": "Joo-rah Tem-pest",
+    "Gabil": "Gah-beel"
 }
 
 def phontify(text):

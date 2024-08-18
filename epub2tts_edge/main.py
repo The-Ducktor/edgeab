@@ -46,7 +46,7 @@ def append_silence(tempfile, duration=1200):
 
 
 async def run_tts(sentence, filename, voice="en-US-BrianNeural"):
-    communicate = edge_tts.Communicate(sentence.phontify, voice)
+    communicate = edge_tts.Communicate(phonics.phontify(sentence), voice)
     await communicate.save(filename)
     return append_silence(filename)
 
