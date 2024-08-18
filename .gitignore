@@ -167,3 +167,4 @@ cython_debug/
 #Project
 epub2tts_edge/output/
 *.txt
+*.csv
