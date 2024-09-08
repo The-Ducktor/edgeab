@@ -31,267 +31,229 @@ final_dir = os.getcwd()
 voice = "en-US-BrianNeural"
 
 
-def remove_special_characters(input_string):
-    return re.sub("[◇]+", "", input_string)
+class AudioProcessor:
+    def __init__(self, output_dir):
+        self.output_dir = output_dir
+        self.processed_files = {}
+        os.makedirs(output_dir, exist_ok=True)
 
+    @staticmethod
+    def remove_special_characters(input_string):
+        return re.sub(r"[◇]+", "", input_string)
 
-def append_silence(tempfile, duration=1200):
-    if not os.path.exists(tempfile) or os.path.getsize(tempfile) == 0:
-        if os.path.exists(tempfile):
-            os.remove(tempfile)
-        return False
-    audio = AudioSegment.from_file(tempfile)
-    combined = audio + AudioSegment.silent(duration)
-    combined.export(tempfile, format="flac")
-    return True
+    @staticmethod
+    def append_silence(tempfile, duration=1200):
+        if not os.path.exists(tempfile) or os.path.getsize(tempfile) == 0:
+            if os.path.exists(tempfile):
+                os.remove(tempfile)
+            return False
+        audio = AudioSegment.from_file(tempfile)
+        combined = audio + AudioSegment.silent(duration)
+        combined.export(tempfile, format="flac")
+        return True
 
+    async def run_tts(self, sentence, filename, voice="en-US-BrianNeural"):
+        communicate = edge_tts.Communicate(
+            self.remove_special_characters(sentence), voice
+        )
+        await communicate.save(filename)
+        return self.append_silence(filename)
 
-async def run_tts(sentence, filename, voice="en-US-BrianNeural"):
-    communicate = edge_tts.Communicate(phontify(sentence), voice)
-    await communicate.save(filename)
-    return append_silence(filename)
+    def read_sentence(self, sentence, tcount, retries=3, voice="en-US-BrianNeural"):
+        filename = os.path.join(self.output_dir, f"pg{tcount}.flac")
+        if filename in self.processed_files:
+            print(Fore.YELLOW + "Already exists")
+            return filename
 
+        attempt = 0
+        while attempt < retries:
+            try:
+                if any(symbol in sentence for symbol in ["◇", "◆"]):
+                    print(Fore.YELLOW + "Special symbol found, adding silence")
+                    silence = AudioSegment.silent(duration=1600)
+                    silence.export(filename, format="flac")
+                    self.processed_files[filename] = True
+                    return filename
 
-SILENCE_DURATION = 1600
+                asyncio.run(self.run_tts(sentence, filename, voice))
+                if os.path.exists(filename) and os.path.getsize(filename) > 0:
+                    self.processed_files[filename] = True
+                    return filename
+                else:
+                    print(Fore.YELLOW + "Audio file is empty, retrying...")
+            except Exception as e:
+                print(
+                    Fore.YELLOW
+                    + f'Retrying sentence "{sentence}" / {tcount + 1} due to error: {e}'
+                )
+            attempt += 1
+            time.sleep(1**attempt)
 
+        print(
+            Fore.RED
+            + f"Failed to process sentence {tcount + 1} after {retries} attempts"
+        )
+        return None
 
-def read_sentence(sentence, tcount, retries=3, voice="en-US-BrianNeural"):
-    filename = os.path.join(output_dir, f"pg{tcount}.flac")
+    def process_audio_chunk(self, audio_chunk):
+        combined_chunk = AudioSegment.empty()
+        for audio_file in audio_chunk:
+            try:
+                combined_chunk += AudioSegment.from_file(audio_file)
+            except Exception as e:
+                print(f"Error processing file {audio_file}: {e}")
+        return combined_chunk
 
-    # Check if already processed
-    if filename in processed_files:
-        print(Fore.YELLOW + "Already exists")
-        return filename
-    attempt = 0
-    while attempt < retries:
-        try:
-            if any(symbol in sentence for symbol in ["◇", "◆"]):
-                print(Fore.YELLOW + "Special symbol found, adding silence")
-                silence = AudioSegment.silent(duration=SILENCE_DURATION)
-                silence.export(filename, format="flac")
-                processed_files[filename] = True
-                return filename
+    def combine_audio(self, audio_list, chapter_number=0):
+        silence_duration = 2000
+        num_files = len(audio_list)
+        if num_files <= 0:
+            print("No audio files to combine.")
+            return
 
-            asyncio.run(run_tts(sentence, filename, voice))
-            if os.path.exists(filename) and os.path.getsize(filename) > 0:
-                processed_files[filename] = True
-                return filename
-            else:
-                print(Fore.YELLOW + "Audio file is empty, retrying...")
-        except Exception as e:
-            print(
-                Fore.YELLOW
-                + f'Retrying sentence "{sentence}" / {tcount + 1} due to error: {e}'
-            )
-        attempt += 1
-        time.sleep(1**attempt)
-
-    print(
-        Fore.RED + f"Failed to process sentence {tcount + 1} after {retries} attempts"
-    )
-    return None
-
-
-def split_list(lst, parts):
-    length = len(lst)
-    size = length // parts
-    leftovers = length % parts
-    start = 0
-    result = []
-    for i in range(parts):
-        end = start + size + (1 if leftovers > 0 else 0)
-        result.append(lst[start:end])
-        start = end
-        leftovers -= 1
-    return result
-
-
-def process_audio_chunk(audio_chunk):
-    combined_chunk = AudioSegment.empty()
-    for audio_file in audio_chunk:
-        try:
-            combined_chunk += AudioSegment.from_file(audio_file)
-        except Exception as e:
-            print(f"Error processing file {audio_file}: {e}")
-    return combined_chunk
-
-
-def combine_audio(
-    audio_list, chapter_number: int = 0, output_dir: str = "."
-):
-    # Define the duration of silence in milliseconds (e.g., 1000 milliseconds = 1 second)
-    silence_duration = 2000  # 2 seconds of silence
-
-    # Calculate an appropriate chunk size based on the number of audio files
-    num_files = len(audio_list)
-    if num_files <= 0:
-        print("No audio files to combine.")
-        return
-
-    # Use a heuristic to determine chunk size
-    chunk_size = min(
-        3, num_files
-    )  # Example: Minimum chunk size of 3 or number of files
-
-    # Split audio_list into chunks
-    audio_chunks = [
-        audio_list[i : i + chunk_size] for i in range(0, len(audio_list), chunk_size)
-    ]
-
-    # Concurrently process each chunk
-    with ThreadPoolExecutor() as executor, alive_bar(
-        len(audio_chunks), title=f"Combining Chapter {chapter_number + 1}"
-    ) as bar:
-        # Submit tasks to executor for concurrent processing
-        futures = [
-            executor.submit(process_audio_chunk, chunk) for chunk in audio_chunks
+        chunk_size = min(3, num_files)
+        audio_chunks = [
+            audio_list[i : i + chunk_size]
+            for i in range(0, len(audio_list), chunk_size)
         ]
 
-        # Retrieve results and combine chunks into final_audio
-        final_audio = AudioSegment.empty()
-        for future in futures:
-            chunk_audio = future.result()
-            final_audio += chunk_audio
-            bar()
+        with ThreadPoolExecutor() as executor, alive_bar(
+            len(audio_chunks), title=f"Combining Chapter {chapter_number + 1}"
+        ) as bar:
+            futures = [
+                executor.submit(self.process_audio_chunk, chunk)
+                for chunk in audio_chunks
+            ]
+            final_audio = AudioSegment.empty()
+            for future in futures:
+                chunk_audio = future.result()
+                final_audio += chunk_audio
+                bar()
 
-    # Add silence at the end of the combined audio
-    final_audio += AudioSegment.silent(duration=silence_duration)
-
-    # Export the combined audio to a file
-    combined_filename = os.path.join(output_dir, f"chapter_{chapter_number + 1}.flac")
-    final_audio.export(combined_filename, format="flac")
-    print(
-        f"Combined audio for Chapter {chapter_number + 1} saved as {combined_filename}"
-    )
-
-    # Optionally, clean up individual audio files
-    for chunk in audio_chunks:
-        for audio_file in chunk:
-            os.remove(audio_file)
-
-
-def process_chapter(
-    chapter, chapter_number, total_chapters, output_dir, voice="en-US-BrianNeural"
-):
-    # Define the output file for the chapter
-    chapter_output_file = os.path.join(output_dir, f"chapter_{chapter_number + 1}.flac")
-
-    # Check if the chapter output file already exists
-    if os.path.exists(chapter_output_file):
-        print(
-            Fore.YELLOW + f"Chapter {chapter_number + 1} already processed, skipping..."
+        final_audio += AudioSegment.silent(duration=silence_duration)
+        combined_filename = os.path.join(
+            self.output_dir, f"chapter_{chapter_number + 1}.flac"
         )
-        return chapter_output_file  # Return the existing file
-
-    sentences = [sentence for sentence in chapter.split("\n") if sentence.strip()]
-    tcount = sum(
-        len([s for s in total_chapters[i].split("\n") if s.strip()])
-        for i in range(chapter_number)
-    )
-
-    print(
-        Fore.GREEN + f"Starting Chapter {chapter_number + 1}: {sentences[0][:50]}..."
-        if sentences
-        else f"Starting Chapter {chapter_number + 1}: Empty Chapter"
-    )
-
-    # Check for existing files in output directory and mark them as processed
-    processed_files = {}
-    for file in os.listdir(output_dir):
-        if file.endswith(".flac"):
-            processed_files[os.path.join(output_dir, file)] = True
-
-    sentence_dict = {
-        i: {
-            "text": sentence,
-            "filename": os.path.join(output_dir, f"pg{tcount + i}.flac"),
-            "processed": False,
-            "voice": voice,
-        }
-        for i, sentence in enumerate(sentences)
-    }
-
-    with ThreadPoolExecutor() as executor, alive_bar(
-        len(sentences), title=f"Processing Chapter {chapter_number + 1}"
-    ) as bar:
-        futures = {
-            executor.submit(
-                read_sentence,
-                sentence_dict[i]["text"],
-                tcount + i,
-                3,  # retries
-                sentence_dict[i]["voice"],
-            ): i
-            for i in sentence_dict
-        }
-        for future in as_completed(futures):
-            try:
-                result = future.result()
-                index = futures[future]
-                if result:
-                    sentence_dict[index]["processed"] = True
-                    sentence_dict[index]["filename"] = result
-            except Exception as e:
-                print(Fore.RED + f"Generated an exception: {e}")
-            bar()
-
-    # List of audio files to be combined
-    audio_files = [
-        sentence_dict[i]["filename"]
-        for i in sentence_dict
-        if sentence_dict[i]["processed"]
-    ]
-
-    # Combine the audio files into the chapter output file
-    combine_audio(audio_files, chapter_number, output_dir)
-
-    # Return the output file for the chapter
-    return chapter_output_file
-
-
-def clean_up():
-    for file in os.listdir(output_dir):
-        if file.startswith("pg"):
-            os.remove(os.path.join(output_dir, file))
-
-
-def chapter_data(content):
-    data = []
-    temp_sent = content.split("\n")
-    for line in temp_sent:
-        if line.startswith("# "):
-            data.append(line.replace("# ", ""))
-        elif line.startswith("Title:"):
-            book_title = line.replace("Title:", "").strip()
-    return data
-
-
-def read_book(content, cover_img=None, voice="en-US-BrianNeural"):
-    print(Fore.BLUE + "Content before splitting into chapters:\n", content[:500], "...")
-    chapters = content.split("# ", 1)[-1].split("# ")
-    print(Fore.BLUE + f"Number of chapters parts found: {len(chapters)}")
-    for chapter_number, chapter in enumerate(chapters):
+        final_audio.export(combined_filename, format="flac")
         print(
-            Fore.BLUE + f"Chapter {chapter_number + 1} content preview:\n",
-            chapter[:200],
+            f"Combined audio for Chapter {chapter_number + 1} saved as {combined_filename}"
+        )
+
+        for chunk in audio_chunks:
+            for audio_file in chunk:
+                os.remove(audio_file)
+
+    def process_chapter(
+        self, chapter, chapter_number, total_chapters, voice="en-US-BrianNeural"
+    ):
+        chapter_output_file = os.path.join(
+            self.output_dir, f"chapter_{chapter_number + 1}.flac"
+        )
+        if os.path.exists(chapter_output_file):
+            print(
+                Fore.YELLOW
+                + f"Chapter {chapter_number + 1} already processed, skipping..."
+            )
+            return chapter_output_file
+
+        sentences = [sentence for sentence in chapter.split("\n") if sentence.strip()]
+        tcount = sum(
+            len([s for s in total_chapters[i].split("\n") if s.strip()])
+            for i in range(chapter_number)
+        )
+
+        print(
+            Fore.GREEN + f"Starting Chapter {chapter_number + 1}: {sentences[0][:50]}..."
+            if sentences
+            else f"Starting Chapter {chapter_number + 1}: Empty Chapter"
+        )
+
+        sentence_dict = {
+            i: {
+                "text": sentence,
+                "filename": os.path.join(self.output_dir, f"pg{tcount + i}.flac"),
+                "processed": False,
+                "voice": voice,
+            }
+            for i, sentence in enumerate(sentences)
+        }
+
+        with ThreadPoolExecutor() as executor, alive_bar(
+            len(sentences), title=f"Processing Chapter {chapter_number + 1}"
+        ) as bar:
+            futures = {
+                executor.submit(
+                    self.read_sentence,
+                    sentence_dict[i]["text"],
+                    tcount + i,
+                    3,
+                    sentence_dict[i]["voice"],
+                ): i
+                for i in sentence_dict
+            }
+            for future in as_completed(futures):
+                try:
+                    result = future.result()
+                    index = futures[future]
+                    if result:
+                        sentence_dict[index]["processed"] = True
+                        sentence_dict[index]["filename"] = result
+                except Exception as e:
+                    print(f"Generated an exception: {e}")
+                bar()
+
+        audio_files = [
+            sentence_dict[i]["filename"]
+            for i in sentence_dict
+            if sentence_dict[i]["processed"]
+        ]
+        self.combine_audio(audio_files, chapter_number)
+
+        return chapter_output_file
+
+    def clean_up(self):
+        for file in os.listdir(self.output_dir):
+            if file.startswith("pg"):
+                os.remove(os.path.join(self.output_dir, file))
+
+    def chapter_data(self, content):
+        data = []
+        temp_sent = content.split("\n")
+        for line in temp_sent:
+            if line.startswith("# "):
+                data.append(line.replace("# ", ""))
+            elif line.startswith("Title:"):
+                book_title = line.replace("Title:", "").strip()
+        return data
+
+    def read_book(self, content, cover_img=None, voice="en-US-BrianNeural"):
+        print(
+            Fore.BLUE + "Content before splitting into chapters:\n",
+            content[:500],
             "...",
         )
-        process_chapter(chapter, chapter_number, chapters, output_dir, voice)
-    clean_up()
-    # Make into m4b audiobook and merge files
-    file_list = [
-        os.path.join(output_dir, f)
-        for f in os.listdir(output_dir)
-        if (f.endswith(".flac") and f.startswith("chapter"))
-    ]
-    print(Fore.GREEN + "Merging Files")
-    time.sleep(2)
-    chaptermake.create(
-        chapter_data(content),
-        file_list,
-        os.path.join(output_dir, "book.m4b"),
-        output_dir,
-    )
+        chapters = content.split("# ", 1)[-1].split("# ")
+        print(Fore.BLUE + f"Number of chapters parts found: {len(chapters)}")
+        for chapter_number, chapter in enumerate(chapters):
+            print(
+                Fore.BLUE + f"Chapter {chapter_number + 1} content preview:\n",
+                Fore.LIGHTBLACK_EX + chapter[:200],
+            )
+            self.process_chapter(chapter, chapter_number, chapters, voice)
+        self.clean_up()
+        file_list = [
+            os.path.join(self.output_dir, f)
+            for f in os.listdir(self.output_dir)
+            if f.endswith(".flac") and f.startswith("chapter")
+        ]
+        print(Fore.GREEN + "Merging Files")
+        time.sleep(2)
+        chaptermake.create(
+            self.chapter_data(content),
+            file_list,
+            os.path.join(self.output_dir, "book.m4b"),
+            self.output_dir,
+        )
 
 
 class M4BMetadataHandler:
@@ -393,10 +355,6 @@ class M4BMetadataHandler:
         print(f"\nBasic stats:\nDuration: {duration} seconds\nBitrate: {bitrate} bps")
 
         return output_file
-
-    def add_cover(self, cover_img, output_file):
-        # Assuming this function adds the cover to the m4b file (the implementation of this was not provided)
-        print(f"Adding cover: {cover_img} to {output_file}")
 
     def process(self):
         title, author, description, cover_image_href = self.extract_metadata_from_opf()
@@ -512,7 +470,8 @@ def main():
     if file_path.endswith(".txt"):
         with open(file_path, "r") as file_txt:
             file_content = file_txt.read()
-        read_book(file_content, cover_img, voice)
+            book_reader = AudioProcessor(output_dir)
+            book_reader.read_book(file_content, cover_img, voice)
         handler = M4BMetadataHandler(metadata_opf, "", "", cover_img)
         handler.process()
     elif file_path.endswith(".epub"):
