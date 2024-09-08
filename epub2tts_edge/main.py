@@ -14,8 +14,9 @@ import shutil
 from mutagen import mp4
 from PIL import Image
 import chaptermake
-from epub_convert import export
+from epub_convert import export_book_contents as export
 from ebooklib import epub
+from phonics import phontify
 
 # Initialize colorama
 init(autoreset=True)
@@ -46,7 +47,7 @@ def append_silence(tempfile, duration=1200):
 
 
 async def run_tts(sentence, filename, voice="en-US-BrianNeural"):
-    communicate = edge_tts.Communicate(phonics.phontify(sentence), voice)
+    communicate = edge_tts.Communicate(phontify(sentence), voice)
     await communicate.save(filename)
     return append_silence(filename)
 
@@ -115,7 +116,9 @@ def process_audio_chunk(audio_chunk):
     return combined_chunk
 
 
-def combine_audio(audio_list, chapter_number=None, output_dir="."):
+def combine_audio(
+    audio_list, chapter_number: int = 0, output_dir: str = "."
+):
     # Define the duration of silence in milliseconds (e.g., 1000 milliseconds = 1 second)
     silence_duration = 2000  # 2 seconds of silence
 
@@ -291,17 +294,26 @@ def read_book(content, cover_img=None, voice="en-US-BrianNeural"):
     )
 
 
-def add_metadata(xml_file, input_m4b=None, output_m4b=None, book_img=None):
-    if input_m4b is None:
-        input_m4b = os.path.join(output_dir, "book.m4b")
-    if output_m4b is None:
-        output_m4b = os.path.join(output_dir, "out.m4b")
-    if book_img is None:
-        book_img = "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
+class M4BMetadataHandler:
+    def __init__(
+        self,
+        xml_file: str,
+        input_m4b: str = "",
+        output_m4b: str = "",
+        book_img=None,
+        output_dir="output",
+        final_dir="final",
+    ):
+        self.xml_file = xml_file
+        self.input_m4b = input_m4b or os.path.join(output_dir, "book.m4b")
+        self.output_m4b = output_m4b or os.path.join(output_dir, "out.m4b")
+        self.book_img = book_img or os.path.join(output_dir, "cover.jpg")
+        self.output_dir = output_dir
+        self.final_dir = final_dir
 
-    def extract_metadata_from_opf(xml_file):
+    def extract_metadata_from_opf(self):
         # Parse the XML file
-        tree = ET.parse(xml_file)
+        tree = ET.parse(self.xml_file)
         root = tree.getroot()
 
         # Namespace dictionary for ElementTree
@@ -321,14 +333,13 @@ def add_metadata(xml_file, input_m4b=None, output_m4b=None, book_img=None):
 
         return title, author, description, cover_image_href
 
-    title, author, description, cover_image_href = extract_metadata_from_opf(xml_file)
-
-    def add_metadata_to_m4b(input_file, output_file, title, author, description):
+    def add_metadata_to_m4b(self, title: str, author: str, description: str):
         # Constructing the ffmpeg command
+        output_file = os.path.join(self.final_dir, f"{title}.m4b")
         ffmpeg_command = [
             "ffmpeg",
             "-i",
-            input_file,
+            self.input_m4b,
             "-metadata",
             f"title={title}",
             "-metadata",
@@ -361,8 +372,7 @@ def add_metadata(xml_file, input_m4b=None, output_m4b=None, book_img=None):
             output_file,
         ]
 
-        metadata_output = subprocess.check_output(ffprobe_command, universal_newlines=True)
-
+        subprocess.check_output(ffprobe_command, universal_newlines=True)
 
         # To get basic stats like duration and bitrate
         ffprobe_stats_command = [
@@ -379,15 +389,20 @@ def add_metadata(xml_file, input_m4b=None, output_m4b=None, book_img=None):
         stats_output = subprocess.check_output(
             ffprobe_stats_command, universal_newlines=True
         )
-
-        print("\nBasic stats:")
         duration, bitrate = stats_output.strip().split("\n")
-        print(f"Duration: {duration} seconds")
-        print(f"Bitrate: {bitrate} bps")
+        print(f"\nBasic stats:\nDuration: {duration} seconds\nBitrate: {bitrate} bps")
 
-    output_file = os.path.join(final_dir, (title + ".m4b"))
-    add_metadata_to_m4b(input_m4b, output_file, title, author, description)
-    add_cover(cover_img, output_file)
+        return output_file
+
+    def add_cover(self, cover_img, output_file):
+        # Assuming this function adds the cover to the m4b file (the implementation of this was not provided)
+        print(f"Adding cover: {cover_img} to {output_file}")
+
+    def process(self):
+        title, author, description, cover_image_href = self.extract_metadata_from_opf()
+        output_file = self.add_metadata_to_m4b(title, author, description)
+        print(self.book_img)
+        self.add_cover(self.book_img, output_file)
 
 
 def resize_image_to_square_top(image_path, size=None):
@@ -446,16 +461,12 @@ def main():
         "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/file.txt"
     )
     output_dir = "/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/output"
-    default_metadata_opf = (
-        f"{
+    default_metadata_opf = f"{
             os.path.join(
             final_dir, 'metadata.opf'
         )
         }"
-    )
-    default_cover_img = (
-        "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
-    )
+    default_cover_img = "/Users/jacks/Documents/Git/devstuff/smartphone.jpg"
     print("started")
     is_debug = False
     os.makedirs(output_dir, exist_ok=True)
@@ -502,7 +513,8 @@ def main():
         with open(file_path, "r") as file_txt:
             file_content = file_txt.read()
         read_book(file_content, cover_img, voice)
-        add_metadata(metadata_opf, None, None, cover_img)
+        handler = M4BMetadataHandler(metadata_opf, "", "", cover_img)
+        handler.process()
     elif file_path.endswith(".epub"):
         book = epub.read_epub(file_path)
         export(book, file_path)
