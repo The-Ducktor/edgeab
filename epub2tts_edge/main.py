@@ -502,7 +502,8 @@ def main():
         with open(file_path, "r") as file_txt:
             file_content = file_txt.read()
         read_book(file_content, cover_img, voice)
-        add_metadata(metadata_opf, None, None, cover_img)
+        handler = M4BMetadataHandler(metadata_opf, "", "", cover_img)
+        handler.process()
     elif file_path.endswith(".epub"):
         book = epub.read_epub(file_path)
         export(book, file_path)
