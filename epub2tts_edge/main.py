@@ -301,13 +301,13 @@ class M4BMetadataHandler:
         input_m4b: str = "",
         output_m4b: str = "",
         book_img=None,
-        output_dir="output",
-        final_dir="final",
+        output_dir="/Users/jacks/Documents/Git/epub2tts-edge/epub2tts_edge/output",
+        final_dir=os.getcwd(),
     ):
         self.xml_file = xml_file
         self.input_m4b = input_m4b or os.path.join(output_dir, "book.m4b")
         self.output_m4b = output_m4b or os.path.join(output_dir, "out.m4b")
-        self.book_img = book_img or os.path.join(output_dir, "cover.jpg")
+        self.book_img = book_img or os.path.join(final_dir, "cover.jpg")
         self.output_dir = output_dir
         self.final_dir = final_dir
 
@@ -402,7 +402,7 @@ class M4BMetadataHandler:
         title, author, description, cover_image_href = self.extract_metadata_from_opf()
         output_file = self.add_metadata_to_m4b(title, author, description)
         print(self.book_img)
-        self.add_cover(self.book_img, output_file)
+        add_cover(self.book_img, output_file)
 
 
 def resize_image_to_square_top(image_path, size=None):
