@@ -35,7 +35,17 @@ class AudioProcessor:
     def __init__(self, output_dir):
         self.output_dir = output_dir
         self.processed_files = {}
+        self.progress = 0.0
+        self.running_book = False
+        self.running_chapter = False
         os.makedirs(output_dir, exist_ok=True)
+
+    def update_progress(self, progress, total=0):
+        print(progress / total)
+        self.progress = progress / total
+
+    def is_running_book(self):
+        return self.running_book
 
     @staticmethod
     def remove_special_characters(input_string):
@@ -58,6 +68,9 @@ class AudioProcessor:
         )
         await communicate.save(filename)
         return self.append_silence(filename)
+
+    def get_progress(self):
+        return self.progress
 
     def read_sentence(self, sentence, tcount, retries=3, voice="en-US-BrianNeural"):
         filename = os.path.join(self.output_dir, f"pg{tcount}.flac")
@@ -163,7 +176,8 @@ class AudioProcessor:
         )
 
         print(
-            Fore.GREEN + f"Starting Chapter {chapter_number + 1}: {sentences[0][:50]}..."
+            Fore.GREEN
+            + f"Starting Chapter {chapter_number + 1}: {sentences[0][:50]}..."
             if sentences
             else f"Starting Chapter {chapter_number + 1}: Empty Chapter"
         )
@@ -178,9 +192,7 @@ class AudioProcessor:
             for i, sentence in enumerate(sentences)
         }
 
-        with ThreadPoolExecutor() as executor, alive_bar(
-            len(sentences), title=f"Processing Chapter {chapter_number + 1}"
-        ) as bar:
+        with ThreadPoolExecutor() as executor:
             futures = {
                 executor.submit(
                     self.read_sentence,
@@ -191,6 +203,7 @@ class AudioProcessor:
                 ): i
                 for i in sentence_dict
             }
+            numbered = 0
             for future in as_completed(futures):
                 try:
                     result = future.result()
@@ -200,7 +213,8 @@ class AudioProcessor:
                         sentence_dict[index]["filename"] = result
                 except Exception as e:
                     print(f"Generated an exception: {e}")
-                bar()
+                numbered += 1
+                self.update_progress(numbered, len(sentences))
 
         audio_files = [
             sentence_dict[i]["filename"]
@@ -226,27 +240,42 @@ class AudioProcessor:
                 book_title = line.replace("Title:", "").strip()
         return data
 
-    def read_book(self, content, cover_img=None, voice="en-US-BrianNeural"):
+    async def read_book(self, content, cover_img=None, voice="en-US-BrianNeural"):
+        
         print(
             Fore.BLUE + "Content before splitting into chapters:\n",
             content[:500],
             "...",
         )
+
         chapters = content.split("# ", 1)[-1].split("# ")
         print(Fore.BLUE + f"Number of chapters parts found: {len(chapters)}")
+
+        total_chapters = len(chapters)
+
         for chapter_number, chapter in enumerate(chapters):
+            self.running_book = True
             print(
                 Fore.BLUE + f"Chapter {chapter_number + 1} content preview:\n",
                 Fore.LIGHTBLACK_EX + chapter[:200],
             )
+
             self.process_chapter(chapter, chapter_number, chapters, voice)
+            self.update_progress(chapter_number + 1, total_chapters)
+            # Update progress after processing each chapter
+
         self.clean_up()
+
         file_list = [
             os.path.join(self.output_dir, f)
             for f in os.listdir(self.output_dir)
             if f.endswith(".flac") and f.startswith("chapter")
         ]
+
         print(Fore.GREEN + "Merging Files")
+
+        # Update progress for the merging step
+
         time.sleep(2)
         chaptermake.create(
             self.chapter_data(content),
@@ -254,6 +283,7 @@ class AudioProcessor:
             os.path.join(self.output_dir, "book.m4b"),
             self.output_dir,
         )
+        self.running_book = False
 
 
 class M4BMetadataHandler:
