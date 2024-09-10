@@ -64,7 +64,7 @@ class AudioProcessor:
 
     async def run_tts(self, sentence, filename, voice="en-US-BrianNeural"):
         communicate = edge_tts.Communicate(
-            self.remove_special_characters(sentence), voice
+            self.remove_special_characters(phontify(sentence)), voice
         )
         await communicate.save(filename)
         return self.append_silence(filename)
@@ -261,7 +261,7 @@ class AudioProcessor:
             )
 
             self.process_chapter(chapter, chapter_number, chapters, voice)
-            self.update_progress(chapter_number + 1, total_chapters)
+            self.update_progress(chapter_number, total_chapters)
             # Update progress after processing each chapter
 
         self.clean_up()
